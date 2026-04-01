@@ -18,8 +18,23 @@ pub fn send_to(endpoint_name: &str, message: Vec<u8>) -> Result<Vec<u8>, ErrorCo
 /// Sends a message over an existing stream and returns the response.
 ///
 /// This allows reusing the same connection across multiple calls.
+///
 /// NOTE: This requires to send and receive messages one at a time as in multi-threaded
 /// contexts, this will ruin the message integrity as chunks can potentially be out of sync.
+///
+/// # Examples
+///
+/// ```no_run
+/// use std::os::linux::net::SocketAddrExt;
+/// use std::os::unix::net::{SocketAddr, UnixStream};
+/// use onepassword_ipc_client::send_with_stream;
+///
+/// let addr = SocketAddr::from_abstract_name("your_endpoint_name").unwrap();
+/// let mut stream = UnixStream::connect_addr(&addr).unwrap();
+///
+/// let response1 = send_with_stream(&mut stream, b"request one".to_vec()).unwrap();
+/// let response2 = send_with_stream(&mut stream, b"request two".to_vec()).unwrap();
+/// ```
 pub fn send_with_stream(stream: &mut UnixStream, message: Vec<u8>) -> Result<Vec<u8>, ErrorCode> {
     send_and_receive(stream, message)
 }

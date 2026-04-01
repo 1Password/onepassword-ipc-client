@@ -36,6 +36,23 @@ pub enum ErrorCode {
 /// Sends a message to the IPC server at the given endpoint and returns the response.
 ///
 /// This is a synchronous, blocking call that creates a fresh connection per invocation.
+///
+/// The `endpoint_name` is interpreted as a Mach port name on macOS, an abstract Unix socket
+/// name on Linux, or a named pipe path on Windows.
+///
+/// Returns the response bytes on success, or an [`ErrorCode`] on failure.
+///
+/// # Examples
+///
+/// ```no_run
+/// use onepassword_ipc_client::{send_to, ErrorCode};
+///
+/// let request = b"my request payload".to_vec();
+/// match send_to("your_endpoint_name", request) {
+///     Ok(response) => println!("Got {} bytes back", response.len()),
+///     Err(err) => eprintln!("IPC failed: {:?}", err),
+/// }
+/// ```
 #[cfg(any(target_os = "linux", target_os = "windows", target_os = "macos"))]
 pub fn send_to(endpoint_name: &str, message: Vec<u8>) -> Result<Vec<u8>, ErrorCode> {
     platform::send_to(endpoint_name, message)

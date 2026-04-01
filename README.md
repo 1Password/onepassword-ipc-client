@@ -1,4 +1,4 @@
-# 1Password IPC Client 
+# 1Password IPC Client
 
 ## Overview
 
@@ -68,62 +68,6 @@ let response2 = send_with_pipe(&mut pipe, request2).unwrap();
 
 Note: Windows and Linux have a limitation in multi-threaded environments with message integrity. Users must ensure they send and receive one at a time.
 
-## Public API
-
-### `send_to`
-
-```rust
-pub fn send_to(endpoint_name: &str, message: Vec<u8>) -> Result<Vec<u8>, ErrorCode>
-```
-
-Sends a message to the IPC server at the given endpoint and returns the response. This is a synchronous, blocking call that creates a fresh connection per invocation.
-
-| Parameter | Type | Description |
-| :-------- | :--- | :---------- |
-| endpoint_name | `&str` | The endpoint to connect to. Interpreted as a Mach port name on macOS, an abstract Unix socket name on Linux, or a named pipe path on Windows. |
-| message | `Vec<u8>` | The raw request bytes to send |
-
-**Returns:** `Ok(Vec<u8>)` containing the response bytes, or `Err(ErrorCode)` on failure.
-
-### `send_with_client` (macOS only)
-
-```rust
-pub fn send_with_client(client: &mut Client, request: Vec<u8>) -> Result<Vec<u8>, ErrorCode>
-```
-
-Sends a message over an existing Mach port client. Allows reusing the same connection across multiple calls.
-
-### `send_with_stream` (Linux only)
-
-```rust
-pub fn send_with_stream(stream: &mut UnixStream, message: Vec<u8>) -> Result<Vec<u8>, ErrorCode>
-```
-
-Sends a message over an existing Unix stream. Allows reusing the same connection across multiple calls.
-
-### `send_with_pipe` (Windows only)
-
-```rust
-pub fn send_with_pipe(pipe: &mut File, message: Vec<u8>) -> Result<Vec<u8>, ErrorCode>
-```
-
-Sends a message over an existing named pipe. Allows reusing the same connection across multiple calls.
-
-## Error Handling
-
-All platforms share a single `ErrorCode` enum, re-exported from the crate root as `onepassword_ipc_client::ErrorCode`.
-
-| Value | Description |
-| :---- | :---------- |
-| `InvalidArguments` | Invalid arguments were provided (e.g. bad endpoint name). |
-| `FailedToConnect` | Failed to connect to the IPC endpoint. |
-| `FailedToSend` | Failed to send the message. |
-| `FailedToReceive` | Failed to receive a response from the server. |
-| `FailedToEncode` | Failed to encode the message into the wire format. |
-| `FailedToDecode` | Failed to decode the response from the wire format. |
-| `ServerClosedConnection` | The server closed the connection unexpectedly. |
-| `Internal` | An internal error occurred. |
-
 ## Wire Protocol
 
 ### Framing (Linux / Windows)
@@ -173,3 +117,21 @@ The maximum chunk size is 500,000 bytes (1-byte header + up to 499,999 bytes of 
 
 On macOS, if the server's response spans multiple chunks, the client sends a dummy (empty) chunk after each intermediate response chunk to request the next one. On Linux and Windows, all response chunks are sent by the server without further prompting.
 
+## Credits
+
+Made with ❤️ and ☕ by the [1Password](https://1password.com/) team.
+
+### License
+
+<sup>
+Licensed under either of <a href="LICENSE-APACHE">Apache License, Version
+2.0</a> or <a href="LICENSE-MIT">MIT license</a> at your option.
+</sup>
+
+<br>
+
+<sub>
+Unless you explicitly state otherwise, any contribution intentionally submitted
+for inclusion in this crate by you, as defined in the Apache-2.0 license, shall
+be dual licensed as above, without any additional terms or conditions.
+</sub>

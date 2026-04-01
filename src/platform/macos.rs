@@ -15,6 +15,20 @@ pub fn send_to(endpoint_name: &str, request: Vec<u8>) -> Result<Vec<u8>, ErrorCo
     send_with_client(&mut client, request)
 }
 
+/// Sends a message over an existing Mach port client and returns the response.
+///
+/// This allows reusing the same connection across multiple calls.
+///
+/// # Examples
+///
+/// ```no_run
+/// use onepassword_ipc_client::send_with_client;
+/// use mach_listener::Client;
+///
+/// let mut client = Client::connect("your_endpoint_name").unwrap();
+/// let response = send_with_client(&mut client, b"hello".to_vec()).unwrap();
+/// println!("Got {} bytes back", response.len());
+/// ```
 pub fn send_with_client(client: &mut Client, request: Vec<u8>) -> Result<Vec<u8>, ErrorCode> {
     let chunks = build_chunks(&request);
     let mut iter = chunks.into_iter().peekable();
