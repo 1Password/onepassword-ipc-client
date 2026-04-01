@@ -32,7 +32,7 @@ Each platform exposes a lower-level function that accepts an existing connection
 **macOS:**
 
 ```rust
-use onepassword_ipc_client::platform::send_with_client;
+use onepassword_ipc_client::send_with_client;
 use mach_listener::Client;
 
 let mut client = Client::connect("your_endpoint_name").unwrap();
@@ -43,7 +43,7 @@ let response2 = send_with_client(&mut client, request2).unwrap();
 **Linux:**
 
 ```rust
-use onepassword_ipc_client::platform::send_with_stream;
+use onepassword_ipc_client::send_with_stream;
 use std::os::unix::net::UnixStream;
 
 let mut stream = /* connect to abstract socket */;
@@ -54,7 +54,7 @@ let response2 = send_with_stream(&mut stream, request2).unwrap();
 **Windows:**
 
 ```rust
-use onepassword_ipc_client::platform::send_with_pipe;
+use onepassword_ipc_client::send_with_pipe;
 use std::fs::OpenOptions;
 
 let mut pipe = OpenOptions::new()
@@ -111,32 +111,18 @@ Sends a message over an existing named pipe. Allows reusing the same connection 
 
 ## Error Handling
 
-Each platform defines its own `ErrorCode` enum. The enum is re-exported from the crate root as `onepassword_ipc_client::ErrorCode`.
-
-### macOS ErrorCode
+All platforms share a single `ErrorCode` enum, re-exported from the crate root as `onepassword_ipc_client::ErrorCode`.
 
 | Value | Description |
 | :---- | :---------- |
 | `InvalidArguments` | Invalid arguments were provided (e.g. bad endpoint name). |
-| `UnexpectedOsError` | An unexpected operating system error occurred. |
-| `RegistrationError` | Failed to register with the Mach port. |
-| `CorruptMessage` | A received message was malformed or corrupt. |
-| `MessageTooLarge` | The message exceeds the maximum allowed size. |
-| `FailedToSend` | Failed to send the message to the Mach port. |
-| `NoReply` | No reply was received from the server. |
-| `Internal` | An internal error occurred (e.g. unexpected empty response or invalid chunk). |
-
-### Linux / Windows ErrorCode
-
-| Value | Description |
-| :---- | :---------- |
-| `InvalidArguments` | Invalid arguments were provided (e.g. bad endpoint name). |
-| `FailedToConnect` | Failed to connect to the Unix socket or named pipe. |
-| `FailedToSendMessage` | Failed to write the message to the connection. |
-| `FailedToReceiveResponse` | Failed to read a response from the connection. |
-| `FailedToEncodeMessage` | Failed to encode the message into the wire format. |
-| `FailedToDecodeMessage` | Failed to decode the response from the wire format. |
+| `FailedToConnect` | Failed to connect to the IPC endpoint. |
+| `FailedToSend` | Failed to send the message. |
+| `FailedToReceive` | Failed to receive a response from the server. |
+| `FailedToEncode` | Failed to encode the message into the wire format. |
+| `FailedToDecode` | Failed to decode the response from the wire format. |
 | `ServerClosedConnection` | The server closed the connection unexpectedly. |
+| `Internal` | An internal error occurred. |
 
 ## Wire Protocol
 
@@ -212,7 +198,7 @@ fn main() {
 ```rust
 use std::os::linux::net::SocketAddrExt;
 use std::os::unix::net::{SocketAddr, UnixStream};
-use onepassword_ipc_client::platform::send_with_stream;
+use onepassword_ipc_client::send_with_stream;
 
 fn main() {
     let addr = SocketAddr::from_abstract_name("your_endpoint_name").unwrap();
