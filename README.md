@@ -2,13 +2,13 @@
 
 ## Overview
 
-The `onepassword-ipc-client` crate provides a cross-platform client for communicating with the 1Password desktop app over IPC. Communication uses the native transport on each platform:
+The `onepassword-ipc-client` crate provides a cross-platform client for communicating with integrations exposed by the 1Password desktop app over IPC. Communication uses the native transport on each platform:
 
 - **macOS**: Mach ports
 - **Linux**: Abstract Unix sockets
 - **Windows**: Named pipes
 
-The API follows a request-response pattern: the client sends a message (as raw bytes) to a named endpoint exposed by the 1Password desktop app, and receives a response. Large messages are automatically split into chunks and reassembled transparently.
+The API follows a request-response pattern: the client sends a message (as raw bytes) to a named endpoint and receives a response. Large messages are automatically split into chunks and reassembled transparently.
 
 ## Transport
 
