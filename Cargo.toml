@@ -1,0 +1,21 @@
+[package]
+name = "onepassword-ipc-client"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+description = "Client library for communicating with integrations exposed by the 1Password desktop app over IPC"
+repository = "https://github.com/1Password/onepassword-ipc-client"
+
+[dependencies]
+itertools = "0.14"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+mach-listener = { git = "https://github.com/complexspaces/mach-listener", tag = "0.1.0-alpha.2" }
+
+[target.'cfg(any(target_os = "linux", target_os = "windows"))'.dependencies]
+tokio-util = { version = "0.7", features = ["codec"] }
+
+[dev-dependencies]
+tokio-util = { version = "0.7", features = ["codec"] }
+futures-util = { version = "0.3", features = ["sink"] }
+tokio = { version = "1", features = ["rt", "macros", "net"] }
