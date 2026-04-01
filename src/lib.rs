@@ -1,21 +1,4 @@
-//! Client library for communicating with the 1Password desktop app over IPC.
-//!
-//! This crate provides a cross-platform client that speaks the 1Password IPC
-//! protocol, using the native transport on each platform:
-//!
-//! - **macOS**: Mach ports
-//! - **Linux**: Abstract Unix sockets
-//! - **Windows**: Named pipes
-//!
-//! # Quick start
-//!
-//! ```no_run
-//! use onepassword_ipc_client::send_to;
-//!
-//! let request: Vec<u8> = b"hello 1password".to_vec();
-//! let response = send_to("my_port_name", request).unwrap();
-//! println!("response: {} bytes", response.len());
-//! ```
+//! Client library for communicating with integrations exposed by the 1Password desktop app over IPC
 
 pub(crate) mod chunking;
 
