@@ -1,6 +1,6 @@
 //! Client library for communicating with integrations exposed by the 1Password desktop app over IPC
 
-pub(crate) mod chunking;
+pub mod chunking;
 
 #[cfg(any(target_os = "linux", target_os = "windows", target_os = "macos"))]
 mod platform;
