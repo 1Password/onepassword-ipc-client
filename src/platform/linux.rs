@@ -26,7 +26,7 @@ fn peer_identity(stream: &UnixStream) -> Result<ProcessId, ErrorCode> {
     }
     // SAFETY: `getsockopt` returned success, so `cred` is fully initialized.
     let cred = unsafe { cred.assume_init() };
-    Ok(ProcessId::new(cred.pid))
+    Ok(ProcessId::new(cred.pid as u32))
 }
 
 /// Sends a message to the IPC server at the given endpoint and returns the response.

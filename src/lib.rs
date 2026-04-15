@@ -84,36 +84,19 @@ impl AuditToken {
     }
 
     /// Returns the process ID.
-    pub fn pid(&self) -> i32 {
+    pub fn pid(&self) -> u32 {
         // SAFETY: `audit_token_to_pid` is a stable macOS API that reads
         // from a valid, initialized `audit_token_t`.
-        unsafe { audit_token_to_pid(self.0) }
+        unsafe { audit_token_to_pid(self.0) as u32 }
     }
 }
 
 /// A process identifier.
-#[cfg(target_os = "linux")]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ProcessId(i32);
-
-#[cfg(target_os = "linux")]
-impl ProcessId {
-    pub(crate) fn new(pid: i32) -> Self {
-        Self(pid)
-    }
-
-    /// Returns the process ID.
-    pub fn pid(&self) -> i32 {
-        self.0
-    }
-}
-
-/// A process identifier.
-#[cfg(target_os = "windows")]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+#[derive(Clone, Copy)]
 pub struct ProcessId(u32);
 
-#[cfg(target_os = "windows")]
+#[cfg(any(target_os = "linux", target_os = "windows"))]
 impl ProcessId {
     pub(crate) fn new(pid: u32) -> Self {
         Self(pid)
