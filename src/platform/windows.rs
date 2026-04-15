@@ -4,14 +4,13 @@ use std::os::windows::io::AsRawHandle;
 use super::stream_io::send_and_receive;
 use crate::{ErrorCode, IpcResponse, ProcessId};
 
-/// Returns the [`ProcessId`] of the server at the other end of a named pipe.
-pub fn peer_identity(pipe: &File) -> Result<ProcessId, ErrorCode> {
+fn peer_identity(pipe: &File) -> Result<ProcessId, ErrorCode> {
     let mut pid: u32 = 0;
     // SAFETY: `as_raw_handle()` returns a valid handle for the open pipe,
     // and `&mut pid` is a valid pointer to a u32.
     let result = unsafe {
         windows_sys::Win32::System::Pipes::GetNamedPipeServerProcessId(
-            pipe.as_raw_handle() as *mut std::ffi::c_void,
+            pipe.as_raw_handle().cast(),
             &mut pid,
         )
     };
@@ -31,19 +30,12 @@ pub fn send_to(endpoint_name: &str, message: Vec<u8>) -> Result<IpcResponse, Err
         .write(true)
         .open(endpoint_name)
         .map_err(|_| ErrorCode::FailedToConnect)?;
-    let peer = peer_identity(&pipe)?;
-    let data = send_and_receive(&mut pipe, message)?;
-    Ok(IpcResponse {
-        data,
-        peer_identity: peer,
-    })
+    send_with_pipe(&mut pipe, message)
 }
 
 /// Sends a message over an existing named pipe and returns the response.
 ///
-/// This allows reusing the same connection across multiple calls. Use
-/// [`peer_identity`] once after opening the pipe, then pass the result
-/// into each call to avoid redundant syscalls.
+/// This allows reusing the same connection across multiple calls.
 ///
 /// NOTE: This requires to send and receive messages one at a time as in multi-threaded
 /// contexts, this will ruin the message integrity as chunks can potentially be out of sync.
@@ -52,23 +44,19 @@ pub fn send_to(endpoint_name: &str, message: Vec<u8>) -> Result<IpcResponse, Err
 ///
 /// ```no_run
 /// use std::fs::OpenOptions;
-/// use onepassword_ipc_client::{send_with_pipe, peer_identity};
+/// use onepassword_ipc_client::send_with_pipe;
 ///
 /// let mut pipe = OpenOptions::new()
 ///     .read(true)
 ///     .write(true)
 ///     .open(r"\\.\pipe\your_endpoint_name")
 ///     .unwrap();
-/// let peer = peer_identity(&pipe).unwrap();
 ///
-/// let response1 = send_with_pipe(&mut pipe, peer, b"request one".to_vec()).unwrap();
-/// let response2 = send_with_pipe(&mut pipe, peer, b"request two".to_vec()).unwrap();
+/// let response1 = send_with_pipe(&mut pipe, b"request one".to_vec()).unwrap();
+/// let response2 = send_with_pipe(&mut pipe, b"request two".to_vec()).unwrap();
 /// ```
-pub fn send_with_pipe(
-    pipe: &mut File,
-    peer: ProcessId,
-    message: Vec<u8>,
-) -> Result<IpcResponse, ErrorCode> {
+pub fn send_with_pipe(pipe: &mut File, message: Vec<u8>) -> Result<IpcResponse, ErrorCode> {
+    let peer = peer_identity(pipe)?;
     let data = send_and_receive(pipe, message)?;
     Ok(IpcResponse {
         data,
@@ -112,8 +100,7 @@ mod tests {
             .write(true)
             .open(&pipe_name)
             .unwrap();
-        let peer = peer_identity(&pipe).unwrap();
-        let result = send_with_pipe(&mut pipe, peer, message.clone()).unwrap();
+        let result = send_with_pipe(&mut pipe, message.clone()).unwrap();
         assert_eq!(result.data, message);
 
         server.join().unwrap();
@@ -150,9 +137,8 @@ mod tests {
             .write(true)
             .open(&pipe_name)
             .unwrap();
-        let peer = peer_identity(&pipe).unwrap();
         for (msg, exp) in messages.into_iter().zip(expected.iter()) {
-            let result = send_with_pipe(&mut pipe, peer, msg).unwrap();
+            let result = send_with_pipe(&mut pipe, msg).unwrap();
             assert_eq!(&result.data, exp);
         }
 

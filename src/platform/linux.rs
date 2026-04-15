@@ -1,3 +1,4 @@
+use std::mem::MaybeUninit;
 use std::os::linux::net::SocketAddrExt;
 use std::os::unix::io::AsRawFd;
 use std::os::unix::net::SocketAddr;
@@ -6,10 +7,9 @@ use std::os::unix::net::UnixStream;
 use super::stream_io::send_and_receive;
 use crate::{ErrorCode, IpcResponse, ProcessId};
 
-/// Returns the [`ProcessId`] of the peer at the other end of a Unix stream.
-pub fn peer_identity(stream: &UnixStream) -> Result<ProcessId, ErrorCode> {
-    let mut cred: libc::ucred = unsafe { std::mem::zeroed() };
-    let mut len = std::mem::size_of::<libc::ucred>() as libc::socklen_t;
+fn peer_identity(stream: &UnixStream) -> Result<ProcessId, ErrorCode> {
+    let mut cred = MaybeUninit::<libc::ucred>::zeroed();
+    let mut len = size_of::<libc::ucred>() as libc::socklen_t;
     // SAFETY: `stream.as_raw_fd()` is a valid socket fd, and `cred`/`len`
     // are valid pointers to appropriately sized buffers.
     let ret = unsafe {
@@ -17,15 +17,16 @@ pub fn peer_identity(stream: &UnixStream) -> Result<ProcessId, ErrorCode> {
             stream.as_raw_fd(),
             libc::SOL_SOCKET,
             libc::SO_PEERCRED,
-            &mut cred as *mut _ as *mut libc::c_void,
+            cred.as_mut_ptr().cast(),
             &mut len,
         )
     };
-    if ret == 0 {
-        Ok(ProcessId::new(cred.pid as u32))
-    } else {
-        Err(ErrorCode::Internal)
+    if ret != 0 {
+        return Err(ErrorCode::Internal);
     }
+    // SAFETY: `getsockopt` returned success, so `cred` is fully initialized.
+    let cred = unsafe { cred.assume_init() };
+    Ok(ProcessId::new(cred.pid))
 }
 
 /// Sends a message to the IPC server at the given endpoint and returns the response.
@@ -35,19 +36,12 @@ pub fn send_to(endpoint_name: &str, message: Vec<u8>) -> Result<IpcResponse, Err
     let addr =
         SocketAddr::from_abstract_name(endpoint_name).map_err(|_| ErrorCode::InvalidArguments)?;
     let mut stream = UnixStream::connect_addr(&addr).map_err(|_| ErrorCode::FailedToConnect)?;
-    let peer = peer_identity(&stream)?;
-    let data = send_and_receive(&mut stream, message)?;
-    Ok(IpcResponse {
-        data,
-        peer_identity: peer,
-    })
+    send_with_stream(&mut stream, message)
 }
 
 /// Sends a message over an existing stream and returns the response.
 ///
-/// This allows reusing the same connection across multiple calls. Use
-/// [`peer_identity`] once after connecting, then pass the result into
-/// each call to avoid redundant syscalls.
+/// This allows reusing the same connection across multiple calls.
 ///
 /// NOTE: This requires to send and receive messages one at a time as in multi-threaded
 /// contexts, this will ruin the message integrity as chunks can potentially be out of sync.
@@ -57,20 +51,19 @@ pub fn send_to(endpoint_name: &str, message: Vec<u8>) -> Result<IpcResponse, Err
 /// ```no_run
 /// use std::os::linux::net::SocketAddrExt;
 /// use std::os::unix::net::{SocketAddr, UnixStream};
-/// use onepassword_ipc_client::{send_with_stream, peer_identity};
+/// use onepassword_ipc_client::send_with_stream;
 ///
 /// let addr = SocketAddr::from_abstract_name("your_endpoint_name").unwrap();
 /// let mut stream = UnixStream::connect_addr(&addr).unwrap();
-/// let peer = peer_identity(&stream).unwrap();
 ///
-/// let response1 = send_with_stream(&mut stream, peer, b"request one".to_vec()).unwrap();
-/// let response2 = send_with_stream(&mut stream, peer, b"request two".to_vec()).unwrap();
+/// let response1 = send_with_stream(&mut stream, b"request one".to_vec()).unwrap();
+/// let response2 = send_with_stream(&mut stream, b"request two".to_vec()).unwrap();
 /// ```
 pub fn send_with_stream(
     stream: &mut UnixStream,
-    peer: ProcessId,
     message: Vec<u8>,
 ) -> Result<IpcResponse, ErrorCode> {
+    let peer = peer_identity(stream)?;
     let data = send_and_receive(stream, message)?;
     Ok(IpcResponse {
         data,
@@ -106,8 +99,7 @@ mod tests {
 
         let message = vec![0xAB; 100];
         let mut stream = UnixStream::connect_addr(&addr).unwrap();
-        let peer = peer_identity(&stream).unwrap();
-        let result = send_with_stream(&mut stream, peer, message.clone()).unwrap();
+        let result = send_with_stream(&mut stream, message.clone()).unwrap();
         assert_eq!(result.data, message);
 
         server.join().unwrap();
@@ -138,9 +130,8 @@ mod tests {
         });
 
         let mut stream = UnixStream::connect_addr(&addr).unwrap();
-        let peer = peer_identity(&stream).unwrap();
         for (msg, exp) in messages.into_iter().zip(expected.iter()) {
-            let result = send_with_stream(&mut stream, peer, msg).unwrap();
+            let result = send_with_stream(&mut stream, msg).unwrap();
             assert_eq!(&result.data, exp);
         }
 

@@ -8,9 +8,9 @@ mod platform;
 #[cfg(target_os = "macos")]
 pub use platform::send_with_client;
 #[cfg(target_os = "windows")]
-pub use platform::{peer_identity, send_with_pipe};
+pub use platform::send_with_pipe;
 #[cfg(target_os = "linux")]
-pub use platform::{peer_identity, send_with_stream};
+pub use platform::send_with_stream;
 
 /// Represents an error that can occur during IPC communication.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -59,11 +59,16 @@ pub type PeerIdentity = ProcessId;
 
 /// A macOS audit token identifying a process.
 ///
-/// Wraps [`mach_listener::audit_token_t`] with named accessors for each field.
 /// See <https://knight.sc/reverse%20engineering/2020/03/20/audit-tokens-explained.html>.
 #[cfg(target_os = "macos")]
 #[derive(Clone, Copy)]
 pub struct AuditToken(mach_listener::audit_token_t);
+
+#[cfg(target_os = "macos")]
+#[link(name = "bsm")]
+unsafe extern "C" {
+    fn audit_token_to_pid(atoken: mach_listener::audit_token_t) -> i32;
+}
 
 #[cfg(target_os = "macos")]
 impl AuditToken {
@@ -71,23 +76,44 @@ impl AuditToken {
         Self(raw)
     }
 
-    /// Returns the underlying [`mach_listener::audit_token_t`].
-    pub fn as_raw(&self) -> mach_listener::audit_token_t {
-        self.0
+    /// Returns the raw audit token as a `[u32; 8]` array.
+    ///
+    /// This can be freely converted back into a platform `audit_token_t`.
+    pub fn as_raw(&self) -> [u32; 8] {
+        self.0.val
     }
 
     /// Returns the process ID.
-    pub fn pid(&self) -> u32 {
-        self.0.val[5]
+    pub fn pid(&self) -> i32 {
+        // SAFETY: `audit_token_to_pid` is a stable macOS API that reads
+        // from a valid, initialized `audit_token_t`.
+        unsafe { audit_token_to_pid(self.0) }
     }
 }
 
 /// A process identifier.
-#[cfg(any(target_os = "linux", target_os = "windows"))]
+#[cfg(target_os = "linux")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ProcessId(i32);
+
+#[cfg(target_os = "linux")]
+impl ProcessId {
+    pub(crate) fn new(pid: i32) -> Self {
+        Self(pid)
+    }
+
+    /// Returns the process ID.
+    pub fn pid(&self) -> i32 {
+        self.0
+    }
+}
+
+/// A process identifier.
+#[cfg(target_os = "windows")]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ProcessId(u32);
 
-#[cfg(any(target_os = "linux", target_os = "windows"))]
+#[cfg(target_os = "windows")]
 impl ProcessId {
     pub(crate) fn new(pid: u32) -> Self {
         Self(pid)
