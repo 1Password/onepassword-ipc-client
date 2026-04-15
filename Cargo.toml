@@ -15,7 +15,12 @@ mach-listener = { git = "https://github.com/complexspaces/mach-listener", tag = 
 [target.'cfg(any(target_os = "linux", target_os = "windows"))'.dependencies]
 tokio-util = { version = "0.7", features = ["codec"] }
 
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_System_Pipes"] }
+
 [dev-dependencies]
 tokio-util = { version = "0.7", features = ["codec"] }
 futures-util = { version = "0.3", features = ["sink"] }
 tokio = { version = "1", features = ["rt", "macros", "net"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
