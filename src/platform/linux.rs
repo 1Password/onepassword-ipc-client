@@ -1,4 +1,5 @@
 use std::os::linux::net::SocketAddrExt;
+use std::os::unix::io::AsRawFd;
 use std::os::unix::net::SocketAddr;
 use std::os::unix::net::UnixStream;
 
@@ -7,9 +8,24 @@ use crate::{ErrorCode, IpcResponse, ProcessId};
 
 /// Returns the [`ProcessId`] of the peer at the other end of a Unix stream.
 pub fn peer_identity(stream: &UnixStream) -> Result<ProcessId, ErrorCode> {
-    let cred = stream.peer_cred().map_err(|_| ErrorCode::Internal)?;
-    let pid = cred.pid().ok_or(ErrorCode::Internal)? as u32;
-    Ok(ProcessId::new(pid))
+    let mut cred: libc::ucred = unsafe { std::mem::zeroed() };
+    let mut len = std::mem::size_of::<libc::ucred>() as libc::socklen_t;
+    // SAFETY: `stream.as_raw_fd()` is a valid socket fd, and `cred`/`len`
+    // are valid pointers to appropriately sized buffers.
+    let ret = unsafe {
+        libc::getsockopt(
+            stream.as_raw_fd(),
+            libc::SOL_SOCKET,
+            libc::SO_PEERCRED,
+            &mut cred as *mut _ as *mut libc::c_void,
+            &mut len,
+        )
+    };
+    if ret == 0 {
+        Ok(ProcessId::new(cred.pid as u32))
+    } else {
+        Err(ErrorCode::Internal)
+    }
 }
 
 /// Sends a message to the IPC server at the given endpoint and returns the response.
@@ -84,7 +100,7 @@ mod tests {
             rt.block_on(async {
                 let listener = tokio::net::UnixListener::from_std(std_listener).unwrap();
                 let (stream, _) = listener.accept().await.unwrap();
-                super::stream_io::async_echo_server(stream, 1).await;
+                crate::platform::stream_io::async_echo_server(stream, 1).await;
             });
         });
 
@@ -117,7 +133,7 @@ mod tests {
             rt.block_on(async {
                 let listener = tokio::net::UnixListener::from_std(std_listener).unwrap();
                 let (stream, _) = listener.accept().await.unwrap();
-                super::stream_io::async_echo_server(stream, 3).await;
+                crate::platform::stream_io::async_echo_server(stream, 3).await;
             });
         });
 

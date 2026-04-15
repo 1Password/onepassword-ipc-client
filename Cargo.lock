@@ -125,6 +125,7 @@ version = "0.1.0"
 dependencies = [
  "futures-util",
  "itertools",
+ "libc",
  "mach-listener",
  "serde",
  "serde_json",

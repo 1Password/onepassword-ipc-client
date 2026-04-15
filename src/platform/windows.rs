@@ -11,7 +11,7 @@ pub fn peer_identity(pipe: &File) -> Result<ProcessId, ErrorCode> {
     // and `&mut pid` is a valid pointer to a u32.
     let result = unsafe {
         windows_sys::Win32::System::Pipes::GetNamedPipeServerProcessId(
-            pipe.as_raw_handle() as isize,
+            pipe.as_raw_handle() as *mut std::ffi::c_void,
             &mut pid,
         )
     };
@@ -102,7 +102,7 @@ mod tests {
         let server = thread::spawn(move || {
             rt.block_on(async {
                 server_pipe.connect().await.unwrap();
-                super::stream_io::async_echo_server(server_pipe, 1).await;
+                crate::platform::stream_io::async_echo_server(server_pipe, 1).await;
             });
         });
 
@@ -141,7 +141,7 @@ mod tests {
         let server = thread::spawn(move || {
             rt.block_on(async {
                 server_pipe.connect().await.unwrap();
-                super::stream_io::async_echo_server(server_pipe, 3).await;
+                crate::platform::stream_io::async_echo_server(server_pipe, 3).await;
             });
         });
 
