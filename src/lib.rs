@@ -76,44 +76,9 @@ impl AuditToken {
         self.0
     }
 
-    /// Returns the audit user ID.
-    pub fn audit_uid(&self) -> u32 {
-        self.0.val[0]
-    }
-
-    /// Returns the effective user ID.
-    pub fn euid(&self) -> u32 {
-        self.0.val[1]
-    }
-
-    /// Returns the effective group ID.
-    pub fn egid(&self) -> u32 {
-        self.0.val[2]
-    }
-
-    /// Returns the real user ID.
-    pub fn ruid(&self) -> u32 {
-        self.0.val[3]
-    }
-
-    /// Returns the real group ID.
-    pub fn rgid(&self) -> u32 {
-        self.0.val[4]
-    }
-
     /// Returns the process ID.
     pub fn pid(&self) -> u32 {
         self.0.val[5]
-    }
-
-    /// Returns the audit session ID.
-    pub fn session_id(&self) -> u32 {
-        self.0.val[6]
-    }
-
-    /// Returns the PID version (disambiguates PID reuse).
-    pub fn pid_version(&self) -> u32 {
-        self.0.val[7]
     }
 }
 

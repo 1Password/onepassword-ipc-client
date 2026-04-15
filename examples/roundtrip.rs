@@ -26,8 +26,8 @@ fn main() {
     thread::sleep(Duration::from_millis(100));
 
     let response = onepassword_ipc_client::send_to(&svc, b"hello".to_vec()).unwrap();
-    assert_eq!(response, b"hello");
-    println!("OK ({} bytes echoed)", response.len());
+    assert_eq!(response.data, b"hello");
+    println!("OK ({} bytes echoed, responder PID {})", response.data.len(), response.peer_identity.pid());
     server.join().unwrap();
 
     // One-shot: large multi-chunk message
@@ -38,8 +38,8 @@ fn main() {
 
     let large: Vec<u8> = (0..1_024 * 1_024).map(|i| (i % 251) as u8).collect();
     let response = onepassword_ipc_client::send_to(&svc, large.clone()).unwrap();
-    assert_eq!(response, large);
-    println!("OK ({} bytes echoed)", response.len());
+    assert_eq!(response.data, large);
+    println!("OK ({} bytes echoed, responder PID {})", response.data.len(), response.peer_identity.pid());
     server.join().unwrap();
 
     // Connection reuse: multiple messages over one client
@@ -54,8 +54,8 @@ fn main() {
     let messages: &[&[u8]] = &[b"first", b"second", b"third"];
     for msg in messages {
         let response = onepassword_ipc_client::send_with_client(&mut client, msg.to_vec()).unwrap();
-        assert_eq!(response, *msg);
-        println!("  {:?} -> OK", std::str::from_utf8(msg).unwrap());
+        assert_eq!(response.data, *msg);
+        println!("  {:?} -> OK (responder PID {})", std::str::from_utf8(msg).unwrap(), response.peer_identity.pid());
     }
     server.join().unwrap();
 
