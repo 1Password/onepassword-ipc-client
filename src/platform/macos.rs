@@ -1,7 +1,7 @@
 use std::time::Duration;
 
-use crate::ErrorCode;
 use crate::chunking::{build_chunks, build_dummy_chunk, parse_chunk};
+use crate::{AuditToken, ErrorCode, IpcResponse};
 use mach_listener::{Client, NewMessage};
 
 const SEND_TIMEOUT_SECS: u64 = 5;
@@ -9,7 +9,7 @@ const SEND_TIMEOUT_SECS: u64 = 5;
 /// Sends a message to the IPC server at the given endpoint and returns the response.
 ///
 /// Creates a fresh connection per call.
-pub fn send_to(endpoint_name: &str, request: Vec<u8>) -> Result<Vec<u8>, ErrorCode> {
+pub fn send_to(endpoint_name: &str, request: Vec<u8>) -> Result<IpcResponse, ErrorCode> {
     let mut client = Client::connect(endpoint_name).map_err(|e| -> ErrorCode { e.into() })?;
     client.set_send_timeout(Some(Duration::from_secs(SEND_TIMEOUT_SECS)));
     send_with_client(&mut client, request)
@@ -27,9 +27,9 @@ pub fn send_to(endpoint_name: &str, request: Vec<u8>) -> Result<Vec<u8>, ErrorCo
 ///
 /// let mut client = Client::connect("your_endpoint_name").unwrap();
 /// let response = send_with_client(&mut client, b"hello".to_vec()).unwrap();
-/// println!("Got {} bytes back", response.len());
+/// println!("Got {} bytes back from PID {}", response.data.len(), response.peer_identity.pid());
 /// ```
-pub fn send_with_client(client: &mut Client, request: Vec<u8>) -> Result<Vec<u8>, ErrorCode> {
+pub fn send_with_client(client: &mut Client, request: Vec<u8>) -> Result<IpcResponse, ErrorCode> {
     let chunks = build_chunks(&request);
     let mut iter = chunks.into_iter().peekable();
 
@@ -48,6 +48,8 @@ pub fn send_with_client(client: &mut Client, request: Vec<u8>) -> Result<Vec<u8>
         return Err(ErrorCode::Internal);
     };
 
+    let peer_identity = AuditToken::new(last_response.sender_identity);
+
     let (is_last_chunk, payload) = parse_chunk(&last_response.data).ok_or(ErrorCode::Internal)?;
     let mut full_response = payload;
     let mut is_response_last_chunk = is_last_chunk;
@@ -62,7 +64,10 @@ pub fn send_with_client(client: &mut Client, request: Vec<u8>) -> Result<Vec<u8>
         is_response_last_chunk = is_last_chunk
     }
 
-    Ok(full_response)
+    Ok(IpcResponse {
+        data: full_response,
+        peer_identity,
+    })
 }
 
 impl From<mach_listener::Error> for ErrorCode {

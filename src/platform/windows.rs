@@ -1,12 +1,30 @@
 use std::fs::{File, OpenOptions};
+use std::os::windows::io::AsRawHandle;
 
 use super::stream_io::send_and_receive;
-use crate::ErrorCode;
+use crate::{ErrorCode, IpcResponse, ProcessId};
+
+fn peer_identity(pipe: &File) -> Result<ProcessId, ErrorCode> {
+    let mut pid: u32 = 0;
+    // SAFETY: `as_raw_handle()` returns a valid handle for the open pipe,
+    // and `&mut pid` is a valid pointer to a u32.
+    let result = unsafe {
+        windows_sys::Win32::System::Pipes::GetNamedPipeServerProcessId(
+            pipe.as_raw_handle().cast(),
+            &mut pid,
+        )
+    };
+    if result != 0 {
+        Ok(ProcessId::new(pid))
+    } else {
+        Err(ErrorCode::Internal)
+    }
+}
 
 /// Sends a message to the IPC server at the given endpoint and returns the response.
 ///
 /// Creates a fresh connection per call.
-pub fn send_to(endpoint_name: &str, message: Vec<u8>) -> Result<Vec<u8>, ErrorCode> {
+pub fn send_to(endpoint_name: &str, message: Vec<u8>) -> Result<IpcResponse, ErrorCode> {
     let mut pipe = OpenOptions::new()
         .read(true)
         .write(true)
@@ -37,8 +55,13 @@ pub fn send_to(endpoint_name: &str, message: Vec<u8>) -> Result<Vec<u8>, ErrorCo
 /// let response1 = send_with_pipe(&mut pipe, b"request one".to_vec()).unwrap();
 /// let response2 = send_with_pipe(&mut pipe, b"request two".to_vec()).unwrap();
 /// ```
-pub fn send_with_pipe(pipe: &mut File, message: Vec<u8>) -> Result<Vec<u8>, ErrorCode> {
-    send_and_receive(pipe, message)
+pub fn send_with_pipe(pipe: &mut File, message: Vec<u8>) -> Result<IpcResponse, ErrorCode> {
+    let peer = peer_identity(pipe)?;
+    let data = send_and_receive(pipe, message)?;
+    Ok(IpcResponse {
+        data,
+        peer_identity: peer,
+    })
 }
 
 #[cfg(test)]
@@ -46,42 +69,7 @@ mod tests {
     use super::*;
     use std::thread;
 
-    use crate::chunking::{build_chunks, parse_chunk};
-    use futures_util::{SinkExt, StreamExt};
-    use tokio::net::windows::named_pipe::{NamedPipeServer, ServerOptions};
-    use tokio_util::bytes::Bytes;
-    use tokio_util::codec::{Framed, LengthDelimitedCodec};
-
-    /// Async echo server that receives N messages and sends each back.
-    /// Uses tokio's async I/O directly on the NamedPipeServer, avoiding
-    /// conversion to a sync File (which breaks on overlapped handles).
-    async fn async_echo_server(pipe: NamedPipeServer, message_count: usize) {
-        let codec = LengthDelimitedCodec::builder()
-            .native_endian()
-            .max_frame_length(1_048_576)
-            .length_field_length(4)
-            .length_field_offset(0)
-            .new_codec();
-
-        let mut framed = Framed::new(pipe, codec);
-
-        for _ in 0..message_count {
-            let mut message = Vec::new();
-            loop {
-                let frame = framed.next().await.unwrap().unwrap();
-                let (is_last, payload) = parse_chunk(&frame).unwrap();
-                message.extend(payload);
-                if is_last {
-                    break;
-                }
-            }
-
-            let chunks = build_chunks(&message);
-            for chunk in chunks {
-                framed.send(Bytes::from(chunk)).await.unwrap();
-            }
-        }
-    }
+    use tokio::net::windows::named_pipe::ServerOptions;
 
     #[test]
     fn chunked_round_trip_over_named_pipe() {
@@ -102,7 +90,7 @@ mod tests {
         let server = thread::spawn(move || {
             rt.block_on(async {
                 server_pipe.connect().await.unwrap();
-                async_echo_server(server_pipe, 1).await;
+                crate::platform::stream_io::async_echo_server(server_pipe, 1).await;
             });
         });
 
@@ -113,7 +101,7 @@ mod tests {
             .open(&pipe_name)
             .unwrap();
         let result = send_with_pipe(&mut pipe, message.clone()).unwrap();
-        assert_eq!(result, message);
+        assert_eq!(result.data, message);
 
         server.join().unwrap();
     }
@@ -140,7 +128,7 @@ mod tests {
         let server = thread::spawn(move || {
             rt.block_on(async {
                 server_pipe.connect().await.unwrap();
-                async_echo_server(server_pipe, 3).await;
+                crate::platform::stream_io::async_echo_server(server_pipe, 3).await;
             });
         });
 
@@ -151,7 +139,7 @@ mod tests {
             .unwrap();
         for (msg, exp) in messages.into_iter().zip(expected.iter()) {
             let result = send_with_pipe(&mut pipe, msg).unwrap();
-            assert_eq!(&result, exp);
+            assert_eq!(&result.data, exp);
         }
 
         server.join().unwrap();

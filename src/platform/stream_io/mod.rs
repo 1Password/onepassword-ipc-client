@@ -9,6 +9,43 @@ use tokio_util::codec::{Decoder, Encoder, LengthDelimitedCodec};
 #[cfg(test)]
 mod tests;
 
+/// Async echo server for integration tests. Generic over any async stream type.
+#[cfg(test)]
+pub(super) async fn async_echo_server<S>(stream: S, message_count: usize)
+where
+    S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
+{
+    use crate::chunking::{build_chunks, parse_chunk};
+    use futures_util::{SinkExt, StreamExt};
+    use tokio_util::codec::Framed;
+
+    let codec = LengthDelimitedCodec::builder()
+        .native_endian()
+        .max_frame_length(1_048_576)
+        .length_field_length(4)
+        .length_field_offset(0)
+        .new_codec();
+
+    let mut framed = Framed::new(stream, codec);
+
+    for _ in 0..message_count {
+        let mut message = Vec::new();
+        loop {
+            let frame = framed.next().await.unwrap().unwrap();
+            let (is_last, payload) = parse_chunk(&frame).unwrap();
+            message.extend(payload);
+            if is_last {
+                break;
+            }
+        }
+
+        let chunks = build_chunks(&message);
+        for chunk in chunks {
+            framed.send(Bytes::from(chunk)).await.unwrap();
+        }
+    }
+}
+
 const MESSAGE_SIZE_HINT: usize = 1024;
 
 const MAX_FRAME_LENGTH: usize = 1_048_576; // 1 MB
