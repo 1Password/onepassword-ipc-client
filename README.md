@@ -10,13 +10,15 @@ The `onepassword-ipc-client` crate provides a cross-platform client for communic
 
 The API follows a request-response pattern: the client sends a message (as raw bytes) to a named endpoint and receives a response. Large messages are automatically split into chunks and reassembled transparently.
 
+*By accessing or using 1Password Developer Tools, you agree to the [API and SDK Terms of Service](https://1password.com/legal/api-sdk-terms-of-service).*
+
 ### Availability and Usage
 
-Availability of supported integrations in the 1Password desktop app may at any time be constrained by one or more of: feature flag-based rollouts, 
-protected in-app user settings, app release channels (ie "production" vs "nightly"), or the connecting process' "platform identity". 
+Availability of supported integrations in the 1Password desktop app may at any time be constrained by one or more of: feature flag-based rollouts,
+protected in-app user settings, app release channels (ie "production" vs "nightly"), or the connecting process' "platform identity".
 
 In addition, 1Password heavily utilizes IPC across platforms to support product features, such as:
-- [Integrating the browser extension and desktop app](https://support.1password.com/connect-1password-browser-app/) 
+- [Integrating the browser extension and desktop app](https://support.1password.com/connect-1password-browser-app/)
 - [Integrating the `op` CLI and desktop app](https://developer.1password.com/docs/cli/get-started/#step-2-turn-on-the-1password-desktop-app-integration)
 - [Providing easy authentication](https://developer.1password.com/docs/sdks/concepts#1password-desktop-app) from [1Password's SDK](https://github.com/1Password/onepassword-sdk-python)
 
